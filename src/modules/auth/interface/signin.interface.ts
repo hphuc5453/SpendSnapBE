@@ -1,8 +1,11 @@
-export interface SignInInterface {
-    readonly id: number;
-    readonly name: string;
+import { ApiProperty } from "@nestjs/swagger";
+import { IsString } from "class-validator";
+
+export class SignInInterface {
+    @ApiProperty({ example: `[EMAIL_ADDRESS]` })
+    @IsString()
     readonly email: string;
-    readonly token?: string;
-    readonly status: string;
-    readonly sendbirdUserId: number;
+    @ApiProperty({ example: `[PASSWORD]` })
+    @IsString()
+    readonly password: string;
 }
