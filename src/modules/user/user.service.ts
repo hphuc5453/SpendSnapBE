@@ -23,16 +23,28 @@ export class UserService {
 
     async create(data: any): Promise<User> {
         try {
-            console.log('Data nhận được:', data);
             const newUser = await this.userModel.create(data);
             return newUser;
         } catch (error) {
-            console.error('Lỗi Mongoose cụ thể:', error.message); // Nhìn vào terminal để xem lỗi gì
             throw error;
         }
     }
 
     async getAll(): Promise<User[]> {
         return this.userModel.find();
+    }
+
+    async updateAvatar(userId: string, avatarUrl: string): Promise<User> {
+        const user = await this.userModel.findById(userId);
+
+        if (!user) {
+            throw new NotFoundException(`User with ID "${userId}" not found`);
+        }
+
+        user.avatar = avatarUrl;
+
+        await user.save();
+
+        return user;
     }
 }

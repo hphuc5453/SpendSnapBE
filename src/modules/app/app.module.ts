@@ -20,6 +20,5 @@ import { MongooseModule } from '@nestjs/mongoose';
     AuthModule,
     UserModule,
   ],
-  // ...
 })
 export class AppModule { }
