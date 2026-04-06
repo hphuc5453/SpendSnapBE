@@ -8,11 +8,16 @@ export class UserService {
 
     constructor(@InjectModel(User.name) private readonly userModel: Model<User>) { }
 
-    async findOne(where: any): Promise<User | null> {
-        const user = this.userModel.findOne(where);
+    async getUserByEmail(email: string): Promise<User | null> {
+        const user = await this.userModel.findOne({ email }).lean();
         if (!user) {
-            throw new NotFoundException(`There isn't any user with identifier: ${where}`)
+            throw new NotFoundException(`There isn't any user with email: ${email}`)
         }
+        return user;
+    }
+
+    async findByEmail(email: string): Promise<User | null> {
+        const user = await this.userModel.findOne({ email }).lean();
         return user;
     }
 

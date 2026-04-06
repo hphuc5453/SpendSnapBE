@@ -1,31 +1,20 @@
 import { Injectable } from "@nestjs/common";
 import { PassportStrategy } from "@nestjs/passport";
-import { ExtractJwt, JwtFromRequestFunction, Strategy } from 'passport-jwt';
-import { User } from "src/modules/user/user.schema";
-import { AuthService } from "../auth.service";
-import { JwtPayload } from "../interface/jwt-payload.interface";
-
-const extractJwtFromCookie: JwtFromRequestFunction = request => {
-    return request.signedCookies['token']!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
-};
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from "@nestjs/config";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
-    constructor(private readonly authService: AuthService) {
+    constructor(configService: ConfigService) {
         super({
-            jwtFromRequest: ExtractJwt.fromExtractors([
-                extractJwtFromCookie,
-                ExtractJwt.fromAuthHeaderAsBearerToken(),
-            ]),
-            ignoreExpiration: false,
-            secretOrKey: process.env.APP_SECRET,
-            passReqToCallback: false
+            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            secretOrKey: configService.get<string>('APP_SECRET'),
         })
     }
 
-    async validate(payload: JwtPayload): Promise<User | null> {
-        return await this.authService.verifyPayload(payload);
+    async validate(payload: any) {
+        return payload;
     }
 
 }
