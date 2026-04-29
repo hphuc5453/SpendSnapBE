@@ -17,11 +17,11 @@ export class TransactionService {
             console.log('Image details:', image ? image.originalname : 'No image provided');
 
             const { amount, userId } = body;
-            
+
             console.log('Uploading image to Cloudinary...');
             const uploadResult: any = await this.cloudinaryService.uploadFile(image);
             console.log('Cloudinary response:', uploadResult.secure_url);
-            
+
             const imageUrl = uploadResult.secure_url || uploadResult.url || String(uploadResult);
 
             console.log('Preparing to save transaction with userId:', userId, typeof userId);
@@ -30,13 +30,26 @@ export class TransactionService {
                 imageUrl,
                 userId: new Types.ObjectId(userId),
             });
-            
+
             console.log('Saving to database...');
             const result = await newTransaction.save();
             console.log('Transaction saved successfully.');
             return result;
         } catch (error) {
             console.error('Error in TransactionsService.create:', error);
+            throw error;
+        }
+    }
+
+    async getMyTransactions(userId: string): Promise<any[]> {
+        try {
+            console.log('--- TransactionsService.getMyTransactions ---');
+            console.log('Fetching transactions for userId:', userId);
+            const transactions = await this.transactionsModel.find({ userId: new Types.ObjectId(userId) }).sort({ createdAt: -1 }).exec();
+            console.log(`Found ${transactions.length} transactions for userId:`, userId);
+            return transactions;
+        } catch (error) {
+            console.error('Error in TransactionsService.getMyTransactions:', error);
             throw error;
         }
     }

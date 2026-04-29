@@ -12,9 +12,8 @@ export class TransactionsController {
     constructor(private readonly transactionsService: TransactionService) { }
 
     @Get()
-    async getAll(): Promise<any[]> {
-        // Cập nhật lại logic nếu service có hàm getAll()
-        return [];
+    async getAll(@Req() req: any,): Promise<any[]> {
+        return this.transactionsService.getMyTransactions(req.user.sub);
     }
 
     @Post('/create')
