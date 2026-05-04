@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, Post, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Get, Post, Req, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
 import { UserService } from "./user.service";
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { User } from "./user.schema";
 import { JwtGuard } from "../auth/guards/jwt-auth.guard";
-import { FileInterceptor } from "@nestjs/platform-express";
+import { FileFieldsInterceptor } from "@nestjs/platform-express";
 import { CloudinaryService } from "../cloudinary/cloudinary.service";
 
 @ApiTags('Users')
@@ -13,23 +13,22 @@ import { CloudinaryService } from "../cloudinary/cloudinary.service";
 export class UserController {
     constructor(private readonly userService: UserService, private readonly cloudinaryService: CloudinaryService) { }
 
-    @Get()
-    async getAll(): Promise<User[]> {
-        return this.userService.getAll();
-    }
-
     @Post('/create')
     async createUser(@Body() body: any): Promise<any> {
         return this.userService.create(body);
     }
 
-    @Post(':id/avatar')
-    @UseInterceptors(FileInterceptor('file')) // Tiếp nhận file với key là 'file'
+    @Post('/updateAvatar')
+    @UseInterceptors(FileFieldsInterceptor([
+        { name: 'avatarFile', maxCount: 1 },
+    ]))
+    @ApiConsumes('multipart/form-data')
     async uploadAvatar(
-        @Param('id') userId: string,
-        @UploadedFile() file: Express.Multer.File, // Lấy dữ liệu file
+        @Req() req: any,
+        @UploadedFiles() files: { avatarFile?: Express.Multer.File[] }
     ) {
         // 1. Upload ảnh lên Cloudinary
+        const file = files.avatarFile?.[0];
         const result = await this.cloudinaryService.uploadFile(file);
 
         // 2. Lấy Secure URL trả về từ Cloudinary
@@ -37,6 +36,11 @@ export class UserController {
         console.log('Link ảnh trên Cloudinary:', avatarUrl);
 
         // 3. Cập nhật link URL này vào MongoDB Atlas thông qua UserService
-        return await this.userService.updateAvatar(userId, avatarUrl);
+        return await this.userService.updateAvatar(req.user.sub, avatarUrl);
+    }
+
+    @Get('/profile')
+    async getProfile(@Req() req: any): Promise<User | null> {
+        return this.userService.getUserById(req.user.sub);
     }
 }

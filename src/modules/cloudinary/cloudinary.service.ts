@@ -5,7 +5,11 @@ import * as streamifier from 'streamifier'; // Cài thêm: npm install streamifi
 
 @Injectable()
 export class CloudinaryService {
-    async uploadFile(file: Express.Multer.File): Promise<UploadApiResponse | UploadApiErrorResponse> {
+    async uploadFile(file: Express.Multer.File | undefined): Promise<UploadApiResponse | UploadApiErrorResponse> {
+        if (!file) {
+            throw new Error('File không tồn tại');
+        }
+
         return new Promise((resolve, reject) => {
             const upload = cloudinary.uploader.upload_stream((error, result) => {
                 if (error) {

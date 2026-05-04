@@ -16,6 +16,14 @@ export class UserService {
         return user;
     }
 
+    async getUserById(id: string): Promise<User | null> {
+        const user = await this.userModel.findById(id).lean();
+        if (!user) {
+            throw new NotFoundException(`There isn't any user with ID: ${id}`)
+        }
+        return user;
+    }
+
     async findByEmail(email: string): Promise<User | null> {
         const user = await this.userModel.findOne({ email }).lean();
         return user;
@@ -28,10 +36,6 @@ export class UserService {
         } catch (error) {
             throw error;
         }
-    }
-
-    async getAll(): Promise<User[]> {
-        return this.userModel.find();
     }
 
     async updateAvatar(userId: string, avatarUrl: string): Promise<User> {
