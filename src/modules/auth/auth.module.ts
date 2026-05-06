@@ -5,12 +5,14 @@ import { UserModule } from '../user/user.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { JwtShareModule } from './jwt-share.module';
+import { CategoryModule } from '../category/category.module';
 
 @Module({
   imports: [
     UserModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtShareModule,
+    CategoryModule,
   ],
   providers: [AuthService, JwtStrategy],
   controllers: [AuthController],

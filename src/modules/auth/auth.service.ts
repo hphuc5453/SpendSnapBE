@@ -5,10 +5,15 @@ import { User } from 'src/modules/user/user.schema';
 import { AUTH_MESSAGES } from 'src/commons/strings';
 import { SignInDto } from './dto/signin.dto';
 import { SignUpDto } from './dto/signup.dto';
+import { CategoryService } from '../category/category.service';
 
 @Injectable()
 export class AuthService {
-    constructor(private userService: UserService, private jwtService: JwtService) { }
+    constructor(
+        private userService: UserService,
+        private jwtService: JwtService,
+        private categoryService: CategoryService,
+    ) { }
 
     async signIn(signInDto: SignInDto): Promise<any> {
         let user: (User | null)
@@ -47,6 +52,7 @@ export class AuthService {
             )
         }
         const newUser = await this.userService.create(signUpDto);
+        await this.categoryService.seedDefaultCategories(newUser._id.toString());
         const { password, ...result } = newUser.toJSON();
         return result;
     }
