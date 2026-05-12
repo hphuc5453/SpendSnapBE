@@ -1,82 +1,104 @@
-import { Injectable, NotFoundException, OnApplicationBootstrap } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import { Category } from "./category.schema";
-import { CategoryType } from "./category-type.schema";
 import { CreateCategoryDto } from "./dto/create-category.dto";
 import { UpdateCategoryDto } from "./dto/update-category.dto";
+import { CATEGORY_ICONS, CATEGORY_TYPES, CategoryKind } from "./constants";
 
-const DEFAULT_CATEGORY_TYPES = [
-    { slug: 'food', label: 'Food & Drink', icon: '🍔' },
-    { slug: 'transport', label: 'Transportation', icon: '🚗' },
-    { slug: 'shopping', label: 'Shopping', icon: '🛍️' },
-    { slug: 'entertainment', label: 'Entertainment', icon: '🎬' },
-    { slug: 'health', label: 'Health', icon: '💊' },
-    { slug: 'bills', label: 'Bills & Utilities', icon: '🏠' },
-    { slug: 'salary', label: 'Salary', icon: '💰' },
-    { slug: 'freelance', label: 'Freelance', icon: '💻' },
+const DEFAULT_USER_CATEGORIES: ReadonlyArray<{ name: string; kind: CategoryKind; icon: string }> = [
+    { name: 'Food & Drink', kind: 'expense', icon: 'food' },
+    { name: 'Transportation', kind: 'expense', icon: 'transport' },
+    { name: 'Shopping', kind: 'expense', icon: 'shopping' },
+    { name: 'Entertainment', kind: 'expense', icon: 'entertainment' },
+    { name: 'Health', kind: 'expense', icon: 'health' },
+    { name: 'Bills & Utilities', kind: 'expense', icon: 'bills' },
+    { name: 'Salary', kind: 'income', icon: 'salary' },
+    { name: 'Freelance', kind: 'income', icon: 'freelance' },
 ];
 
 @Injectable()
-export class CategoryService implements OnApplicationBootstrap {
+export class CategoryService {
     constructor(
         @InjectModel(Category.name) private readonly categoryModel: Model<Category>,
-        @InjectModel(CategoryType.name) private readonly categoryTypeModel: Model<CategoryType>,
     ) { }
 
-    async onApplicationBootstrap(): Promise<void> {
-        for (const t of DEFAULT_CATEGORY_TYPES) {
-            await this.categoryTypeModel.updateOne(
-                { slug: t.slug },
-                { $setOnInsert: t },
-                { upsert: true },
-            );
-        }
+    getCategoryTypes() {
+        return CATEGORY_TYPES;
     }
 
-    async getCategoryTypes(): Promise<CategoryType[]> {
-        return this.categoryTypeModel.find().sort({ createdAt: 1 }).exec();
+    getCategoryIcons() {
+        return CATEGORY_ICONS;
     }
 
     async seedDefaultCategories(userId: string): Promise<void> {
-        const types = await this.categoryTypeModel.find().exec();
-        const docs = types.map(t => ({
-            userId: new Types.ObjectId(userId),
-            name: t.label,
-            typeId: t._id,
-            limitBudget: 0,
-        }));
-        await this.categoryModel.insertMany(docs);
+        const userObjectId = new Types.ObjectId(userId);
+        const existing = await this.categoryModel
+            .find({ userId: userObjectId }, { name: 1 })
+            .lean()
+            .exec();
+        const existingNames = new Set(existing.map(c => c.name));
+
+        const docs = DEFAULT_USER_CATEGORIES
+            .filter(c => !existingNames.has(c.name))
+            .map(c => ({
+                userId: userObjectId,
+                name: c.name,
+                kind: c.kind,
+                icon: c.icon,
+                isDefault: true,
+            }));
+
+        if (docs.length) await this.categoryModel.insertMany(docs);
     }
 
     async addCategory(userId: string, dto: CreateCategoryDto): Promise<Category> {
-        const type = await this.categoryTypeModel.findById(new Types.ObjectId(dto.typeId)).exec();
-        if (!type) throw new NotFoundException('Category type not found');
-
-        const newCategory = new this.categoryModel({
-            userId: new Types.ObjectId(userId),
-            name: dto.name,
-            typeId: type._id,
-            limitBudget: dto.limitBudget,
-        });
-        return newCategory.save();
+        try {
+            const newCategory = new this.categoryModel({
+                userId: new Types.ObjectId(userId),
+                name: dto.name,
+                kind: dto.kind,
+                icon: dto.icon,
+                color: dto.color,
+            });
+            return await newCategory.save();
+        } catch (err: any) {
+            if (err?.code === 11000) {
+                throw new ConflictException('Category name already exists');
+            }
+            throw err;
+        }
     }
 
     async getUserCategories(userId: string): Promise<Category[]> {
         return this.categoryModel
             .find({ userId: new Types.ObjectId(userId) })
-            .populate('typeId')
             .sort({ createdAt: -1 })
             .exec();
     }
 
     async updateCategory(userId: string, categoryId: string, dto: UpdateCategoryDto): Promise<Category> {
-        const category = await this.categoryModel.findOneAndUpdate(
-            { _id: new Types.ObjectId(categoryId), userId: new Types.ObjectId(userId) },
-            { $set: dto },
-            { new: true, populate: 'typeId' },
-        );
-        if (!category) throw new NotFoundException('Category not found');
-        return category;
+        try {
+            const category = await this.categoryModel.findOneAndUpdate(
+                { _id: new Types.ObjectId(categoryId), userId: new Types.ObjectId(userId) },
+                { $set: { ...dto } },
+                { new: true, runValidators: true },
+            );
+            if (!category) throw new NotFoundException('Category not found');
+            return category;
+        } catch (err: any) {
+            if (err?.code === 11000) {
+                throw new ConflictException('Category name already exists');
+            }
+            throw err;
+        }
+    }
+
+    async deleteCategory(userId: string, categoryId: string): Promise<void> {
+        const res = await this.categoryModel.deleteOne({
+            _id: new Types.ObjectId(categoryId),
+            userId: new Types.ObjectId(userId),
+        });
+        if (res.deletedCount === 0) throw new NotFoundException('Category not found');
     }
 }
