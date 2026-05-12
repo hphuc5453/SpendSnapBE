@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from "@nestjs/common
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import { Category } from "./category.schema";
+import { Transactions } from "../transactions/transactions.schema";
 import { CreateCategoryDto } from "./dto/create-category.dto";
 import { UpdateCategoryDto } from "./dto/update-category.dto";
 import { CATEGORY_ICONS, CATEGORY_TYPES, CategoryKind } from "./constants";
@@ -21,6 +22,7 @@ const DEFAULT_USER_CATEGORIES: ReadonlyArray<{ name: string; kind: CategoryKind;
 export class CategoryService {
     constructor(
         @InjectModel(Category.name) private readonly categoryModel: Model<Category>,
+        @InjectModel(Transactions.name) private readonly transactionsModel: Model<Transactions>,
     ) { }
 
     getCategoryTypes() {
@@ -70,11 +72,28 @@ export class CategoryService {
         }
     }
 
-    async getUserCategories(userId: string): Promise<Category[]> {
-        return this.categoryModel
-            .find({ userId: new Types.ObjectId(userId) })
-            .sort({ createdAt: -1 })
-            .exec();
+    async getUserCategories(userId: string): Promise<Array<Record<string, any> & { isMostUsed: boolean }>> {
+        const userObjectId = new Types.ObjectId(userId);
+
+        const [categories, topAgg] = await Promise.all([
+            this.categoryModel
+                .find({ userId: userObjectId })
+                .sort({ createdAt: -1 })
+                .lean()
+                .exec(),
+            this.transactionsModel.aggregate<{ _id: Types.ObjectId; count: number }>([
+                { $match: { userId: userObjectId, categoryId: { $ne: null } } },
+                { $group: { _id: '$categoryId', count: { $sum: 1 } } },
+                { $sort: { count: -1 } },
+                { $limit: 1 },
+            ]),
+        ]);
+
+        const topCategoryId = topAgg[0] ? String(topAgg[0]._id) : null;
+        return categories.map(c => ({
+            ...c,
+            isMostUsed: topCategoryId !== null && String(c._id) === topCategoryId,
+        }));
     }
 
     async updateCategory(userId: string, categoryId: string, dto: UpdateCategoryDto): Promise<Category> {

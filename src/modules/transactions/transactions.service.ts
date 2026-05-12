@@ -1,56 +1,67 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import { Transactions } from "./transactions.schema";
+import { Category } from "../category/category.schema";
 import { CloudinaryService } from "../cloudinary/cloudinary.service";
+import { CreateTransactionDto } from "./dto/create-transaction.dto";
 
 @Injectable()
 export class TransactionService {
     constructor(
         @InjectModel(Transactions.name) private readonly transactionsModel: Model<Transactions>,
+        @InjectModel(Category.name) private readonly categoryModel: Model<Category>,
         private readonly cloudinaryService: CloudinaryService,
     ) { }
-    async create(body: any, image: Express.Multer.File): Promise<any> {
-        try {
-            console.log('--- TransactionsService.create ---');
-            console.log('Body:', body);
-            console.log('Image details:', image ? image.originalname : 'No image provided');
 
-            const { amount, userId } = body;
+    async create(userId: string, dto: CreateTransactionDto, image?: Express.Multer.File): Promise<Transactions> {
+        const userObjectId = new Types.ObjectId(userId);
+        const categoryObjectId = new Types.ObjectId(dto.categoryId);
 
-            console.log('Uploading image to Cloudinary...');
+        const owns = await this.categoryModel.exists({ _id: categoryObjectId, userId: userObjectId });
+        if (!owns) throw new NotFoundException('Category not found');
+
+        let imageUrl: string | undefined;
+        if (image) {
             const uploadResult: any = await this.cloudinaryService.uploadFile(image);
-            console.log('Cloudinary response:', uploadResult.secure_url);
-
-            const imageUrl = uploadResult.secure_url || uploadResult.url || String(uploadResult);
-
-            console.log('Preparing to save transaction with userId:', userId, typeof userId);
-            const newTransaction = new this.transactionsModel({
-                amount,
-                imageUrl,
-                userId: new Types.ObjectId(userId),
-            });
-
-            console.log('Saving to database...');
-            const result = await newTransaction.save();
-            console.log('Transaction saved successfully.');
-            return result;
-        } catch (error) {
-            console.error('Error in TransactionsService.create:', error);
-            throw error;
+            imageUrl = uploadResult.secure_url || uploadResult.url;
         }
+
+        const newTransaction = new this.transactionsModel({
+            userId: userObjectId,
+            categoryId: categoryObjectId,
+            amount: dto.amount,
+            imageUrl,
+        });
+        const saved = await newTransaction.save();
+        await saved.populate('categoryId', 'name icon color kind');
+        return saved;
     }
 
-    async getMyTransactions(userId: string): Promise<any[]> {
-        try {
-            console.log('--- TransactionsService.getMyTransactions ---');
-            console.log('Fetching transactions for userId:', userId);
-            const transactions = await this.transactionsModel.find({ userId: new Types.ObjectId(userId) }).sort({ createdAt: -1 }).exec();
-            console.log(`Found ${transactions.length} transactions for userId:`, userId);
-            return transactions;
-        } catch (error) {
-            console.error('Error in TransactionsService.getMyTransactions:', error);
-            throw error;
-        }
+    async getMyTransactions(userId: string): Promise<{ transactions: Transactions[]; totalSpent: number }> {
+        const userObjectId = new Types.ObjectId(userId);
+
+        const expenseCategories = await this.categoryModel
+            .find({ userId: userObjectId, kind: 'expense' }, { _id: 1 })
+            .lean()
+            .exec();
+        const expenseIds = expenseCategories.map(c => c._id);
+
+        const [transactions, sumResult] = await Promise.all([
+            this.transactionsModel
+                .find({ userId: userObjectId })
+                .sort({ createdAt: -1 })
+                .populate('categoryId', 'name icon color kind')
+                .exec(),
+            this.transactionsModel.aggregate<{ _id: null; total: number }>([
+                { $match: { userId: userObjectId, categoryId: { $in: expenseIds } } },
+                { $group: { _id: null, total: { $sum: '$amount' } } },
+            ]),
+        ]);
+
+        return {
+            transactions,
+            totalSpent: sumResult[0]?.total ?? 0,
+        };
     }
 }

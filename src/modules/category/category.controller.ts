@@ -62,8 +62,14 @@ export class CategoryController {
     }
 
     @Get()
-    @ApiOperation({ summary: 'List the current user\'s categories' })
-    @ApiOkResponse(ok([CATEGORY_EXAMPLE]))
+    @ApiOperation({
+        summary: 'List the current user\'s categories',
+        description: '`isMostUsed` = true for the category with the highest transaction count (all-time, single winner). False on all others if the user has no transactions yet.',
+    })
+    @ApiOkResponse(ok([
+        { ...CATEGORY_EXAMPLE, isMostUsed: true },
+        { ...CATEGORY_EXAMPLE, _id: '671f0d5e8f9a3b1c2d4e5f81', name: 'Travel', icon: 'travel', isMostUsed: false },
+    ]))
     async getUserCategories(@Req() req: any): Promise<any[]> {
         return this.categoryService.getUserCategories(req.user.sub);
     }
