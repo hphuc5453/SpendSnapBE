@@ -1,57 +1,59 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from 'src/modules/user/user.service';
-import { SignUpDto } from './dto/signup_dto';
-import { SignInInterface } from './interface/signin.interface';
 import { User } from 'src/modules/user/user.schema';
 import { AUTH_MESSAGES } from 'src/commons/strings';
-import { JwtPayload } from './interface/jwt-payload.interface';
+import { SignInDto } from './dto/signin.dto';
+import { SignUpDto } from './dto/signup.dto';
+import { CategoryService } from '../category/category.service';
 
 @Injectable()
 export class AuthService {
-    constructor(private userService: UserService, private jwtService: JwtService) { }
+    constructor(
+        private userService: UserService,
+        private jwtService: JwtService,
+        private categoryService: CategoryService,
+    ) { }
 
-    async signIn(email: string, pass: string): Promise<User | null> {
-        return this.validateUser(email, pass);
-    }
-
-    async validateUser(email: string, password: string): Promise<User | null> {
+    async signIn(signInDto: SignInDto): Promise<any> {
         let user: (User | null)
-        try {
-            user = await this.userService.findOne({ where: { email } });
-
-        } catch (err) {
+        user = await this.userService.getUserByEmail(signInDto.email);
+        if (!user) {
             throw new UnauthorizedException(
                 AUTH_MESSAGES.USER_NOT_FOUND
             )
         }
-
-        // if (!await user?.comparePassword(password)) {
-        //     throw new UnauthorizedException(
-        //         AUTH_MESSAGES.PASSWORD_INCORRECT
-        //     )
-        // }
-
-        return user;
-    }
-
-    async verifyPayload(payload: JwtPayload): Promise<User | null> {
-        let user: (User | null)
-        try {
-            user = await this.userService.findOne({ where: { email: payload.sub } });
-        } catch (err) {
+        if (user.password !== signInDto.password) {
             throw new UnauthorizedException(
-                AUTH_MESSAGES.USER_NOT_FOUND
+                AUTH_MESSAGES.PASSWORD_INCORRECT
             )
         }
-        return user;
-    }
 
-    signToken(user: User): string {
         const payload = {
-            sub: user.email,
-        };
+            sub: user._id.toString(),
+            email: user.email,
+            name: user.name,
+        }
 
-        return this.jwtService.sign(payload);
+        const accessToken = await this.jwtService.signAsync(payload);
+        const { password, ...result } = user as any;
+        return {
+            accessToken,
+            user: result
+        };
+    }
+
+    async signUp(signUpDto: SignUpDto): Promise<any> {
+        let user: (User | null)
+        user = await this.userService.findByEmail(signUpDto.email);
+        if (user) {
+            throw new UnauthorizedException(
+                AUTH_MESSAGES.EMAIL_EXISTED
+            )
+        }
+        const newUser = await this.userService.create(signUpDto);
+        await this.categoryService.seedDefaultCategories(newUser._id.toString());
+        const { password, ...result } = newUser.toJSON();
+        return result;
     }
 }

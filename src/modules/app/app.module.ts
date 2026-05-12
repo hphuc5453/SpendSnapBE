@@ -3,24 +3,28 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { UserModule } from '../user/user.module';
 import { MongooseModule } from '@nestjs/mongoose';
-// ... các import khác
+import { TransactionsModule } from '../transactions/transactions.module';
+import { CategoryModule } from '../category/category.module';
+import { StatisticsModule } from '../statistics/statistics.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true, // Để các module khác không cần import lại ConfigModule
+      isGlobal: true,
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         uri: configService.get<string>('MONOGODB_CONNECTION'),
-        dbName: 'sample_mflix'
+        dbName: 'spend_snap'
       }),
     }),
     AuthModule,
     UserModule,
+    TransactionsModule,
+    CategoryModule,
+    StatisticsModule,
   ],
-  // ...
 })
 export class AppModule { }
