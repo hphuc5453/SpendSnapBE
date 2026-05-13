@@ -5,6 +5,7 @@ import { Category, CategorySchema } from "../category/category.schema";
 import { TransactionService } from "./transactions.service";
 import { TransactionsController } from "./transactions.controller";
 import { CloudinaryModule } from "../cloudinary/cloudinary.module";
+import { SocketModule } from "../socket/socket.module";
 
 @Module({
     imports: [
@@ -13,6 +14,7 @@ import { CloudinaryModule } from "../cloudinary/cloudinary.module";
             { name: Category.name, schema: CategorySchema },
         ]),
         CloudinaryModule,
+        SocketModule,
     ],
     controllers: [TransactionsController],
     providers: [TransactionService],
