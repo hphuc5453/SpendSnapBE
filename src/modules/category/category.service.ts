@@ -55,6 +55,14 @@ export class CategoryService {
     }
 
     async addCategory(userId: string, dto: CreateCategoryDto): Promise<Category> {
+        const existingCategory = await this.categoryModel.findOne({
+            userId: new Types.ObjectId(userId),
+            name: dto.name,
+        });
+        if (existingCategory) {
+            throw new ConflictException('Category name already exists');
+        }
+
         try {
             const newCategory = new this.categoryModel({
                 userId: new Types.ObjectId(userId),
