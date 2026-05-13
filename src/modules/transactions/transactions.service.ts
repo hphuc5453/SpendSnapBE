@@ -5,6 +5,7 @@ import { Transactions } from "./transactions.schema";
 import { Category } from "../category/category.schema";
 import { CloudinaryService } from "../cloudinary/cloudinary.service";
 import { CreateTransactionDto } from "./dto/create-transaction.dto";
+import { SocketGateway } from "../socket/socket.gateway";
 
 @Injectable()
 export class TransactionService {
@@ -12,6 +13,7 @@ export class TransactionService {
         @InjectModel(Transactions.name) private readonly transactionsModel: Model<Transactions>,
         @InjectModel(Category.name) private readonly categoryModel: Model<Category>,
         private readonly cloudinaryService: CloudinaryService,
+        private readonly socketGateway: SocketGateway,
     ) { }
 
     async create(userId: string, dto: CreateTransactionDto, image?: Express.Multer.File): Promise<Transactions> {
@@ -35,6 +37,9 @@ export class TransactionService {
         });
         const saved = await newTransaction.save();
         await saved.populate('categoryId', 'name icon color kind');
+
+        this.socketGateway.emitInvalidated(userId, ['transactions', 'statistics', 'categories']);
+
         return saved;
     }
 
