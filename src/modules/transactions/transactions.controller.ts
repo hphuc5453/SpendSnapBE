@@ -17,6 +17,9 @@ const TRANSACTION_EXAMPLE = {
         kind: 'expense',
     },
     amount: 50000,
+    currency: 'VND',
+    originalAmount: 50000,
+    originalCurrency: 'VND',
     imageUrl: 'https://res.cloudinary.com/demo/image/upload/v1/receipt.jpg',
     createdAt: '2026-05-12T10:00:00.000Z',
     updatedAt: '2026-05-12T10:00:00.000Z',
@@ -32,11 +35,12 @@ export class TransactionsController {
     @Get()
     @ApiOperation({
         summary: 'List the current user\'s transactions + total spent',
-        description: '`totalSpent` is the all-time sum of transactions belonging to expense categories.',
+        description: 'Amounts are converted to the user\'s preferred `currency` (see PATCH /users/currency). `originalAmount` / `originalCurrency` preserve the value at creation time. `totalSpent` is the all-time sum of expense transactions in the user\'s currency.',
     })
     @ApiOkResponse(ok({
         transactions: [TRANSACTION_EXAMPLE],
         totalSpent: 4280.50,
+        currency: 'VND',
     }))
     async getAll(@Req() req: any): Promise<any> {
         return this.transactionsService.getMyTransactions(req.user.sub);
@@ -52,6 +56,7 @@ export class TransactionsController {
             properties: {
                 amount: { type: 'number', example: 50000 },
                 categoryId: { type: 'string', example: '671f0d5e8f9a3b1c2d4e5f80' },
+                currency: { type: 'string', enum: ['VND', 'USD'], example: 'VND', description: 'Optional. Defaults to the user\'s preferred currency.' },
                 image: { type: 'string', format: 'binary' },
             },
             required: ['amount', 'categoryId'],

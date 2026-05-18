@@ -1,5 +1,7 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Document, Types } from "mongoose";
+import { CURRENCY_CODES, DEFAULT_CURRENCY } from "../currency/constants";
+import type { CurrencyCode } from "../currency/constants";
 
 @Schema({ collection: 'transactions', timestamps: true })
 export class Transactions extends Document {
@@ -8,6 +10,9 @@ export class Transactions extends Document {
 
     @Prop({ required: true, min: 0 })
     amount: number;
+
+    @Prop({ type: String, enum: CURRENCY_CODES, default: DEFAULT_CURRENCY })
+    currency: CurrencyCode;
 
     @Prop()
     imageUrl: string;

@@ -4,6 +4,9 @@ import { Model, Types } from "mongoose";
 import { Category } from "../category/category.schema";
 import { Budget } from "../category/budget.schema";
 import { Transactions } from "../transactions/transactions.schema";
+import { User } from "../user/user.schema";
+import { ExchangeRateService } from "../currency/exchange-rate.service";
+import type { CurrencyCode } from "../currency/constants";
 
 interface BreakdownItem {
     categoryId: string;
@@ -23,12 +26,19 @@ interface Insight {
     icon: string;
 }
 
+interface AggRow {
+    _id: { categoryId: Types.ObjectId; currency?: string };
+    total: number;
+}
+
 @Injectable()
 export class StatisticsService {
     constructor(
         @InjectModel(Transactions.name) private readonly transactionsModel: Model<Transactions>,
         @InjectModel(Category.name) private readonly categoryModel: Model<Category>,
         @InjectModel(Budget.name) private readonly budgetModel: Model<Budget>,
+        @InjectModel(User.name) private readonly userModel: Model<User>,
+        private readonly exchangeRateService: ExchangeRateService,
     ) { }
 
     async getOverview(userId: string, yearMonth?: string) {
@@ -36,7 +46,10 @@ export class StatisticsService {
         const ranges = computeRanges(ym);
         const userObjectId = new Types.ObjectId(userId);
 
-        const [aggResult, categories, budgets] = await Promise.all([
+        const userDoc = await this.userModel.findById(userObjectId, { currency: 1 }).lean();
+        const displayCurrency: CurrencyCode = this.exchangeRateService.normalizeCurrency(userDoc?.currency);
+
+        const [aggResult, categories, budgets, rates] = await Promise.all([
             this.transactionsModel.aggregate([
                 {
                     $match: {
@@ -48,22 +61,23 @@ export class StatisticsService {
                     $facet: {
                         thisMonth: [
                             { $match: { createdAt: { $gte: ranges.thisMonthStart } } },
-                            { $group: { _id: '$categoryId', total: { $sum: '$amount' } } },
+                            { $group: { _id: { categoryId: '$categoryId', currency: '$currency' }, total: { $sum: '$amount' } } },
                         ],
                         lastMonth: [
                             { $match: { createdAt: { $lt: ranges.thisMonthStart } } },
-                            { $group: { _id: '$categoryId', total: { $sum: '$amount' } } },
+                            { $group: { _id: { categoryId: '$categoryId', currency: '$currency' }, total: { $sum: '$amount' } } },
                         ],
                     },
                 },
             ]),
             this.categoryModel.find({ userId: userObjectId }).lean().exec(),
             this.budgetModel.find({ userId: userObjectId, yearMonth: ym }).lean().exec(),
+            this.exchangeRateService.getRates(),
         ]);
 
-        const facet = aggResult[0] as { thisMonth: Array<{ _id: any; total: number }>; lastMonth: Array<{ _id: any; total: number }> } | undefined;
-        const thisByCat = new Map<string, number>((facet?.thisMonth ?? []).map(r => [String(r._id), r.total]));
-        const lastByCat = new Map<string, number>((facet?.lastMonth ?? []).map(r => [String(r._id), r.total]));
+        const facet = aggResult[0] as { thisMonth: AggRow[]; lastMonth: AggRow[] } | undefined;
+        const thisByCat = this.sumByCategoryConverted(facet?.thisMonth ?? [], rates, displayCurrency);
+        const lastByCat = this.sumByCategoryConverted(facet?.lastMonth ?? [], rates, displayCurrency);
 
         let totalSpent = 0;
         let totalSpentLastMonth = 0;
@@ -103,13 +117,17 @@ export class StatisticsService {
             .filter(b => b.amount > 0 || b.amountLastMonth > 0)
             .sort((a, b) => b.amount - a.amount);
 
-        const totalBudget = budgets.reduce((s, b) => s + b.amount, 0);
+        const totalBudget = budgets.reduce((s, b) => {
+            const from = this.exchangeRateService.normalizeCurrency((b as any).currency);
+            return s + this.exchangeRateService.convertWith(rates, b.amount, from, displayCurrency);
+        }, 0);
         const remainingBudget = totalBudget - totalSpent;
         const daysLeft = daysLeftInMonth(ym);
         const safeToSpendPerDay = daysLeft > 0 ? round2(Math.max(0, remainingBudget) / daysLeft) : null;
 
         return {
             yearMonth: ym,
+            currency: displayCurrency,
             totalSpent: round2(totalSpent),
             totalSpentLastMonth: round2(totalSpentLastMonth),
             spentChangePercent: changePercent(totalSpent, totalSpentLastMonth),
@@ -123,6 +141,22 @@ export class StatisticsService {
             breakdown,
             insights: computeInsights(breakdown),
         };
+    }
+
+    private sumByCategoryConverted(
+        rows: AggRow[],
+        rates: Record<string, number>,
+        to: CurrencyCode,
+    ): Map<string, number> {
+        const out = new Map<string, number>();
+        for (const row of rows) {
+            if (!row._id?.categoryId) continue;
+            const from = this.exchangeRateService.normalizeCurrency(row._id.currency);
+            const converted = this.exchangeRateService.convertWith(rates, row.total, from, to);
+            const key = String(row._id.categoryId);
+            out.set(key, (out.get(key) ?? 0) + converted);
+        }
+        return out;
     }
 }
 

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Post, Req, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
 import { UserService } from "./user.service";
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { User } from "./user.schema";
@@ -6,12 +6,14 @@ import { JwtGuard } from "../auth/guards/jwt-auth.guard";
 import { FileFieldsInterceptor } from "@nestjs/platform-express";
 import { CloudinaryService } from "../cloudinary/cloudinary.service";
 import { created, errorResponse, ok } from "src/commons/swagger";
+import { UpdateCurrencyDto } from "./dto/update-currency.dto";
 
 const USER_EXAMPLE = {
     _id: '671f0d5e8f9a3b1c2d4e5f60',
     email: 'user@example.com',
     name: 'Phuc Le',
     avatar: 'https://res.cloudinary.com/demo/image/upload/v1/avatar.jpg',
+    currency: 'VND',
     createdAt: '2026-05-12T10:00:00.000Z',
     updatedAt: '2026-05-12T10:00:00.000Z',
 };
@@ -75,5 +77,16 @@ export class UserController {
     @ApiResponse(errorResponse(401, 'Unauthorized'))
     async getProfile(@Req() req: any): Promise<User | null> {
         return this.userService.getUserById(req.user.sub);
+    }
+
+    @Patch('/currency')
+    @ApiOperation({ summary: 'Update the current user\'s preferred currency' })
+    @ApiOkResponse(ok({ ...USER_EXAMPLE, currency: 'USD' }))
+    @ApiResponse(errorResponse(404, 'User not found'))
+    async updateCurrency(
+        @Req() req: any,
+        @Body() dto: UpdateCurrencyDto,
+    ): Promise<User> {
+        return this.userService.updateCurrency(req.user.sub, dto.currency);
     }
 }

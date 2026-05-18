@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { User } from "./user.schema";
+import type { CurrencyCode } from "../currency/constants";
 
 @Injectable()
 export class UserService {
@@ -49,6 +50,18 @@ export class UserService {
 
         await user.save();
 
+        return user;
+    }
+
+    async updateCurrency(userId: string, currency: CurrencyCode): Promise<User> {
+        const user = await this.userModel.findByIdAndUpdate(
+            userId,
+            { $set: { currency } },
+            { new: true, runValidators: true },
+        );
+        if (!user) {
+            throw new NotFoundException(`User with ID "${userId}" not found`);
+        }
         return user;
     }
 }

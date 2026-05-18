@@ -1,6 +1,8 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Document, Types } from "mongoose";
 import { YEAR_MONTH_REGEX } from "./constants";
+import { CURRENCY_CODES, DEFAULT_CURRENCY } from "../currency/constants";
+import type { CurrencyCode } from "../currency/constants";
 
 @Schema({ collection: 'budgets', timestamps: true })
 export class Budget extends Document {
@@ -12,6 +14,9 @@ export class Budget extends Document {
 
     @Prop({ required: true, min: 0 })
     amount: number;
+
+    @Prop({ type: String, enum: CURRENCY_CODES, default: DEFAULT_CURRENCY })
+    currency: CurrencyCode;
 
     @Prop({ required: true, match: YEAR_MONTH_REGEX })
     yearMonth: string;

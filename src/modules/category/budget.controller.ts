@@ -11,6 +11,7 @@ const BUDGET_EXAMPLE = {
     categoryId: '671f0d5e8f9a3b1c2d4e5f80',
     yearMonth: '2026-05',
     amount: 5000000,
+    currency: 'VND',
     createdAt: '2026-05-01T00:00:00.000Z',
     updatedAt: '2026-05-12T10:00:00.000Z',
 };
@@ -28,6 +29,9 @@ const BUDGET_WITH_SPENT_EXAMPLE = {
     },
     yearMonth: '2026-05',
     amount: 5000000,
+    currency: 'VND',
+    originalAmount: 5000000,
+    originalCurrency: 'VND',
     spent: 1200000,
     remaining: 3800000,
 };
@@ -53,7 +57,7 @@ export class BudgetController {
     @Get()
     @ApiOperation({
         summary: 'List budgets for a given month with spent / remaining',
-        description: '`yearMonth` defaults to the current UTC month if omitted. `spent` is summed from transactions in that month.',
+        description: '`yearMonth` defaults to the current UTC month if omitted. `spent` is summed from transactions in that month. All amounts are converted to the user\'s preferred `currency`; `originalAmount` / `originalCurrency` preserve the budget\'s value at creation time.',
     })
     @ApiQuery({ name: 'yearMonth', required: false, example: '2026-05', description: 'Year-month in YYYY-MM format' })
     @ApiOkResponse(ok([BUDGET_WITH_SPENT_EXAMPLE]))
