@@ -60,21 +60,15 @@ export class TransactionService {
         const userObjectId = new Types.ObjectId(userId);
         const displayCurrency = await this.getUserCurrency(userObjectId);
 
-        const expenseCategories = await this.categoryModel
-            .find({ userId: userObjectId, kind: 'expense' }, { _id: 1 })
-            .lean()
-            .exec();
-        const expenseIds = expenseCategories.map(c => c._id);
-        const expenseIdSet = new Set(expenseIds.map(id => String(id)));
-
-        const transactions = await this.transactionsModel
-            .find({ userId: userObjectId })
-            .sort({ createdAt: -1 })
-            .populate('categoryId', 'name icon color kind')
-            .lean()
-            .exec();
-
-        const rates = await this.exchangeRateService.getRates();
+        const [transactions, rates] = await Promise.all([
+            this.transactionsModel
+                .find({ userId: userObjectId })
+                .sort({ createdAt: -1 })
+                .populate('categoryId', 'name icon color kind')
+                .lean()
+                .exec(),
+            this.exchangeRateService.getRates(),
+        ]);
 
         let totalSpent = 0;
         const converted = transactions.map(t => {
@@ -86,8 +80,7 @@ export class TransactionService {
                 displayCurrency,
             );
 
-            const categoryRefId = (t.categoryId as any)?._id ?? t.categoryId;
-            if (categoryRefId && expenseIdSet.has(String(categoryRefId))) {
+            if ((t.categoryId as any)?.kind === 'expense') {
                 totalSpent += convertedAmount;
             }
 
